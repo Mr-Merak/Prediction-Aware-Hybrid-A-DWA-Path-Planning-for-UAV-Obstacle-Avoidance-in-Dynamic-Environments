@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     print("\n--- Kalman observation noise variance R ---")
     for obs in [0.5, 2.0, 5.0, 10.0]:
-        run_batch(B.N_PRED_STEPS, NOM_BETA, NOM_PROC, obs, "obs_noise=%.1f" % obs)
+        run_batch(B.N_PRED_STEPS, NOM_BETA, NOM_PROC, obs, "obs_noise=%.2f" % obs)
 
     print("\n--- Kalman process noise variance Q ---")
     for proc in [0.1, 0.5, 2.0, 5.0]:
