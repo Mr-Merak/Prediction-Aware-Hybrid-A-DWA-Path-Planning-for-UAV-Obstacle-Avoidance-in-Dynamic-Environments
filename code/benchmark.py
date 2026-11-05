@@ -93,11 +93,24 @@ tuning.apply_all(A)
 
 import dstar_lite
 
+import imm
+
 # Kalman-filter noise variances, swept by sensitivity.py. The nominal values
 # (process 0.5, observation 2.0) reproduce the manuscript's setup; overriding
 # these globals varies the filter's noise assumptions for the robustness study.
 KF_PROCESS_NOISE = 0.5
 KF_OBS_NOISE = 2.0
+
+# Obstacle-motion predictor. "cv" = the original constant-velocity Kalman
+# filter; "act" = the adaptive coordinated-turn predictor (imm.py), which
+# reduces exactly to "cv" on non-manoeuvring obstacles and estimates the turn
+# rate of turning/accelerating obstacles.  Set per-worker via _init_predictor
+# because multiprocessing on Windows re-imports this module (spawn).
+PREDICTOR = "cv"
+
+
+def _init_predictor(predictor):
+    globals()["PREDICTOR"] = predictor
 
 _orig_kf_init = A.KalmanFilter.__init__
 
@@ -235,6 +248,22 @@ class BenchEnvironment(A.Environment):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.eval_risk_grid = np.zeros(self.grid_size)
+
+    def update_kf_trackers(self, current_time):
+        """One predict+update cycle per obstacle per control step (5 Hz).
+        Idempotent per step so the replan path cannot double-advance the
+        filters.  The Kalman filter is fed the ground-truth obstacle position
+        each step, i.e. the sensor is modelled as an idealised noiseless
+        detector (Section 3.3)."""
+        for obs, tracker in zip(self.dynamic_obstacles, self.obstacle_trackers):
+            if getattr(tracker, "_updated_sim", None) == current_time:
+                continue
+            tracker.predict(tracker.kf.dt)
+            z = np.array([obs.x, obs.y])
+            tracker.kf.update(z)
+            tracker.last_seen_time = current_time
+            tracker.is_tracked = True
+            tracker._updated_sim = current_time
 
     def _risk_into(self, grid, uav, use_kf, n_steps=N_PRED_STEPS):
         grid.fill(0.0)
@@ -513,6 +542,15 @@ def build_scenario(seed, maneuver=False):
             env.obstacle_trackers.append(tracker)
         else:
             env.add_dynamic_obstacle(x, y, radius, vx, vy)
+
+    if PREDICTOR == "act":
+        # Replace the constant-velocity Kalman trackers with the adaptive
+        # coordinated-turn predictor (identical interface, zero-velocity prior).
+        for obs, tracker in zip(env.dynamic_obstacles, env.obstacle_trackers):
+            tracker.kf = imm.AdaptiveCTFilter(
+                DT, process_noise=KF_PROCESS_NOISE,
+                measurement_noise=KF_OBS_NOISE)
+            tracker.kf.initialize(obs.x, obs.y, 0.0, 0.0)
 
     uav = A.UAV(pos=START, **UAV_KW)
     uav.heading = math.atan2(GOAL[1] - START[1], GOAL[0] - START[0])
@@ -1166,7 +1204,12 @@ def main():
                     help="comma-separated config names to run (default: all)")
     ap.add_argument("--maneuver", action="store_true",
                     help="use maneuvering (turning/accelerating) dynamic obstacles")
+    ap.add_argument("--predictor", choices=["cv", "act"], default="cv",
+                    help="obstacle-motion predictor: constant-velocity Kalman "
+                         "(cv) or adaptive coordinated-turn (act)")
     args = ap.parse_args()
+
+    globals()["PREDICTOR"] = args.predictor
 
     if args.configs:
         selected = [c.strip() for c in args.configs.split(",") if c.strip()]
@@ -1182,7 +1225,8 @@ def main():
     rows = []
     if args.jobs > 1:
         import multiprocessing as mp
-        with mp.Pool(args.jobs) as pool:
+        with mp.Pool(args.jobs, initializer=_init_predictor,
+                     initargs=(args.predictor,)) as pool:
             for i, r in enumerate(pool.imap_unordered(_worker, jobs), 1):
                 rows.append(r)
                 print("  [%3d/%3d] %-22s seed %-3d %-9s  %6.1f s"
