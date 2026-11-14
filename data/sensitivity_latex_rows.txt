@@ -1,0 +1,25 @@
+% Compact rows (rate only)
+Prediction horizon (steps) & 5: 69.0 & 10: 70.0 & 15: 68.0 & \textbf{25: 77.0} & 40: 85.0 \\
+$\beta$ & 1: 81.0 & 5: 76.0 & 10: 77.0 & 20: 78.0 & 50: 72.0 \\
+Observation noise $R$ & 0.5: 77.0 & 2: 77.0 & 5: 81.0 & 10: 80.0 & -- \\
+Process noise $Q$ & 0.1: 78.0 & \textbf{0.5: 77.0} & 2: 85.0 & 5: 88.0 & -- \\
+
+% Full rows (rate [CI low, CI high])
+Prediction horizon (steps) & 5 & 100 & 69.0 & [59.4, 77.2] \\
+Prediction horizon (steps) & 10 & 100 & 70.0 & [60.4, 78.1] \\
+Prediction horizon (steps) & 15 & 100 & 68.0 & [58.3, 76.3] \\
+Prediction horizon (steps) & 25 & 100 & 77.0 & [67.8, 84.2] \\
+Prediction horizon (steps) & 40 & 100 & 85.0 & [76.7, 90.7] \\
+$\beta$ & 1 & 100 & 81.0 & [72.2, 87.5] \\
+$\beta$ & 5 & 100 & 76.0 & [66.8, 83.3] \\
+$\beta$ & 10 & 100 & 77.0 & [67.8, 84.2] \\
+$\beta$ & 20 & 100 & 78.0 & [68.9, 85.0] \\
+$\beta$ & 50 & 100 & 72.0 & [62.5, 79.9] \\
+Observation noise $R$ & 0.5 & 100 & 77.0 & [67.8, 84.2] \\
+Observation noise $R$ & 2 & 100 & 77.0 & [67.8, 84.2] \\
+Observation noise $R$ & 5 & 100 & 81.0 & [72.2, 87.5] \\
+Observation noise $R$ & 10 & 100 & 80.0 & [71.1, 86.7] \\
+Process noise $Q$ & 0.1 & 100 & 78.0 & [68.9, 85.0] \\
+Process noise $Q$ & 0.5 & 100 & 77.0 & [67.8, 84.2] \\
+Process noise $Q$ & 2 & 100 & 85.0 & [76.7, 90.7] \\
+Process noise $Q$ & 5 & 100 & 88.0 & [80.2, 93.0] \\

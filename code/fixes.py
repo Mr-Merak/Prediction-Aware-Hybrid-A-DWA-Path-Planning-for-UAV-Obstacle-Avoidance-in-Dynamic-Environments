@@ -19,7 +19,7 @@ FIX 1 -- DWA obstacle-distance term was inert            (11.py line 536)
 `min_obs_dist` is seeded at 0.0 and then only ever reduced, so for any trajectory
 whose clearances are all positive it stays exactly 0.0. That yields
 `obs_score = 1.0 - 0.0/3.0 = 1.0` for *every* candidate, making the sigma_2 term
-of Eq. (11) an additive constant that cancels out of the argmax. The obstacle
+of Eq. (19) an additive constant that cancels out of the argmax. The obstacle
 criterion therefore contributed nothing to command selection.
 
 Fix: seed with +inf so the term measures true minimum clearance.

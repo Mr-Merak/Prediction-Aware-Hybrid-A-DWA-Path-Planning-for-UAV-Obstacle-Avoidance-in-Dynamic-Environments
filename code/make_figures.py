@@ -299,10 +299,14 @@ def fig_risk_evolution(seed=0, times=(0, 30, 60, 90)):
 
 
 def fig_boxplots():
-    """figure8.png -- box plots of the 100-run distributions (experiment_data_v4.xlsx)."""
+    """figure8.png -- box plots of the 100-run distributions (rerun workbook)."""
     import openpyxl
 
-    wb = openpyxl.load_workbook("experiment_data_v4.xlsx")
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _data_path = os.path.join(_root, "data", "experiment_data_nominal_rerun.xlsx")
+    if not os.path.exists(_data_path):
+        _data_path = os.path.join(_root, "data", "experiment_data_v4.xlsx")
+    wb = openpyxl.load_workbook(_data_path)
     ws = wb["Raw runs"]
     rows = list(ws.iter_rows(min_row=2, values_only=True))
 
@@ -316,12 +320,20 @@ def fig_boxplots():
     c_rep = col("Mean Replanning Time (s)")
     c_succ = col("Success")
 
-    label_to_key = {v: k for k, v in CONFIG_LABELS.items()}
+    # Configuration names as stored in the xlsx sheet, mapped to the internal
+    # keys. These differ from the CONFIG_LABELS display labels because the
+    # sheet uses "Proposed algorithm" / "Proposed + Pred-DWA".
+    xlsx_label_to_key = {
+        "A* + DWA": "astar_dwa",
+        "IA*-only": "ia_only",
+        "Proposed algorithm": "proposed",
+        "Proposed + Pred-DWA": "proposed_pred_dwa",
+    }
     # Curate the set of configurations shown (methods with meaningful data).
     shown = ["astar_dwa", "ia_only", "proposed", "proposed_pred_dwa"]
     data = {cfg: {"path": [], "risk": [], "track": [], "replan": []} for cfg in shown}
     for r in rows:
-        cfg = label_to_key.get(r[0])
+        cfg = xlsx_label_to_key.get(r[0])
         if cfg is None or cfg not in shown:
             continue
         succ = r[c_succ]

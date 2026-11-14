@@ -6,13 +6,13 @@ equations describe one thing and 11.py implemented another. Every change is
 traceable to a specific equation in the manuscript.
 
 --------------------------------------------------------------------------
-T1 -- Risk-adaptive heuristic (manuscript Eq. 7-10)
+T1 -- Risk-adaptive heuristic (manuscript Eqs. 15-18)
 --------------------------------------------------------------------------
 Manuscript:
-    f(n) = g(n) + (1 - alpha(rbar)) h_dist(n) + alpha(rbar) h_risk(n)   (7)
-    alpha(rbar) = 1 / (1 + exp(-beta (rbar - r0)))                       (8)
-    h_dist(n) = || p_n - p_goal ||_2                                     (9)
-    h_risk(n) = rbar * d_max                                             (10)
+    f(n) = g(n) + (1 - alpha(rbar)) h_dist(n) + alpha(rbar) h_risk(n)   (15)
+    alpha(rbar) = 1 / (1 + exp(-beta (rbar - r0)))                       (16)
+    h_dist(n) = || p_n - p_goal ||_2                                     (17)
+    h_risk(n) = rbar * d_max                                             (18)
 
 11.py instead used
     alpha = 0.5 + 1.5*sigmoid,  beta_w = 2.0 - 2.0*sigmoid,
@@ -37,7 +37,7 @@ def _d_max_of(env):
 def adaptive_heuristic(self, node, goal, risk_val):
     h_dist = self.heuristic(node, goal)
     h_risk = risk_val * self.d_max
-    # Eq. (8), numerically stable
+    # Eq. (16), numerically stable
     try:
         alpha = 1.0 / (1.0 + math.exp(-self.beta * (risk_val - self.r0)))
     except OverflowError:

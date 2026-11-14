@@ -91,6 +91,38 @@ import tuning
 
 tuning.apply_all(A)
 
+# ---------------------------------------------------------------------------
+# Shape of the risk-adaptive weight alpha(rbar) (Review 2, round 2 #2).
+# "sigmoid" is the manuscript's Eq. (16). "linear" and "threshold" are the two
+# natural alternatives the reviewer asked us to compare against. The mode is
+# read from this module's globals so a multiprocessing initializer can set it
+# per worker (Windows spawn re-imports the module).
+# ---------------------------------------------------------------------------
+ALPHA_MODE = "sigmoid"   # sigmoid | linear | threshold
+
+
+def _paper_adaptive_heuristic(self, node, goal, risk_val):
+    h_dist = self.heuristic(node, goal)
+    h_risk = risk_val * self.d_max
+    mode = globals().get("ALPHA_MODE", "sigmoid")
+    if mode == "sigmoid":
+        try:
+            alpha = 1.0 / (1.0 + math.exp(-self.beta * (risk_val - self.r0)))
+        except OverflowError:
+            alpha = 1.0 if risk_val > self.r0 else 0.0
+    elif mode == "linear":
+        # alpha = rbar clipped to [0, 1] (the linear blend considered in Sec. 4.1)
+        alpha = max(0.0, min(1.0, risk_val))
+    elif mode == "threshold":
+        # hard switch at r0 (the thresholded heuristic considered in Sec. 4.1)
+        alpha = 1.0 if risk_val > self.r0 else 0.0
+    else:
+        raise ValueError("unknown ALPHA_MODE: %r" % (mode,))
+    return (1.0 - alpha) * h_dist + alpha * h_risk
+
+
+A.AdaptiveAStar.adaptive_heuristic = _paper_adaptive_heuristic
+
 import dstar_lite
 
 import imm
@@ -200,7 +232,7 @@ DT = 0.2
 REPLAN_INTERVAL = 5.0
 RISK_TRIGGER = 0.3
 ASTAR_RISK_THRESHOLD = 0.6
-BETA = 10.0  # sigmoid steepness of the risk-adaptive heuristic (Eq. 8)
+BETA = 10.0  # sigmoid steepness of the risk-adaptive heuristic (Section 4.1)
 SMOOTH_RISK_THRESHOLD = 0.7
 GOAL_TOLERANCE = 5.0
 MAX_SIM_TIME = 400.0
@@ -1082,7 +1114,7 @@ def write_excel(rows, summary, tests, path):
         [1, "line 536, DynamicWindowApproach._evaluate",
          "min_obs_dist seeded at 0.0 and only ever reduced, so it stays 0.0 for any "
          "trajectory with positive clearance. obs_score is then 1.0 for every "
-         "candidate, making the sigma_2 obstacle term of Eq. (11) an additive "
+         "candidate, making the sigma_2 obstacle term of Eq. (19) an additive "
          "constant with no effect on the argmax.",
          "Seed min_obs_dist at +inf so the term measures true minimum clearance."],
         [2, "line 521, _simulate_with_collision_check",
@@ -1116,7 +1148,7 @@ def write_excel(rows, summary, tests, path):
         c.alignment = Alignment(horizontal="center", wrap_text=True)
     for row in [
         ["T1", "Spec alignment",
-         "Risk-adaptive heuristic rewritten to implement Eq. (7)-(10) verbatim: "
+         "Risk-adaptive heuristic rewritten to implement Eqs. (15)-(18) verbatim: "
          "f = g + (1-alpha)h_dist + alpha*h_risk, alpha = 1/(1+exp(-beta(rbar-r0))), "
          "h_risk = rbar*d_max.",
          "11.py used a non-convex double weight (alpha in [0.5,2]) with h_risk = "
@@ -1149,7 +1181,7 @@ def write_excel(rows, summary, tests, path):
         ["F1", "Bug fix",
          "DWA _evaluate: min_obs_dist seeded at +inf (was 0.0), so the obstacle term "
          "measures true clearance.",
-         "Seeding at 0.0 made obs_score a constant 1.0 for every candidate (Eq. 11 "
+         "Seeding at 0.0 made obs_score a constant 1.0 for every candidate (Eq. 19 "
          "term inert)."],
         ["F2", "Bug fix",
          "DWA collision margin 0.3 -> 0.5, matching the Sec 5.2 collision criterion.",

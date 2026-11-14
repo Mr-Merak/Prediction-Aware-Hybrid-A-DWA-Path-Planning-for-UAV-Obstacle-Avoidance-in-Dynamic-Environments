@@ -95,6 +95,18 @@ class KF3D:
     def predict(self, k):
         return (np.linalg.matrix_power(self.F, k) @ self.x)[:3].copy()
 
+    def predict_with_cov(self, k):
+        """k-step position prediction with the propagated position covariance.
+
+        The 2D risk field uses the predicted covariance, so the 3D field must
+        as well; using the current posterior covariance would keep the 3D risk
+        field from widening with the prediction horizon.
+        """
+        Fk = np.linalg.matrix_power(self.F, k)
+        x_pred = Fk @ self.x
+        P_pred = Fk @ self.P @ Fk.T + self.Q * k
+        return x_pred[:3].copy(), P_pred[:3, :3].copy()
+
 
 # --------------------------------------------------------------------------
 # Dynamic obstacle
@@ -181,8 +193,7 @@ class Env3D:
             kf = self.kfs[oi]
             for step in range(1, n_steps + 1):
                 if use_kf:
-                    px, py, pz = kf.predict(step)
-                    cov = kf.P[:3, :3]
+                    (px, py, pz), cov = kf.predict_with_cov(step)
                 else:
                     px = o.x + o.vx * step * DT
                     py = o.y + o.vy * step * DT
@@ -256,12 +267,13 @@ class Env3D:
 # 3D risk-adaptive A*
 # --------------------------------------------------------------------------
 class AStar3D:
-    def __init__(self, env, start, goal, beta=BETA, r0=R0):
+    def __init__(self, env, start, goal, beta=BETA, r0=R0, risk_adaptive=True):
         self.env = env
         self.start = self._snap(start)
         self.goal = self._snap(goal)
         self.beta = beta
         self.r0 = r0
+        self.risk_adaptive = risk_adaptive
         self.dmax = math.sqrt((BOUNDS[1] - BOUNDS[0]) ** 2 + (BOUNDS[3] - BOUNDS[2]) ** 2
                               + (BOUNDS[5] - BOUNDS[4]) ** 2)
 
@@ -280,6 +292,24 @@ class AStar3D:
 
     def _alpha(self, rbar):
         return 1.0 / (1.0 + math.exp(-self.beta * (rbar - self.r0)))
+
+    def _heuristic(self, n):
+        """Heuristic evaluated at node n (not at its parent)."""
+        if not self.risk_adaptive:
+            return self._h_dist(n)
+        # local mean risk over 3x3x3
+        s, cnt = 0.0, 0
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    q = (n[0] + dx, n[1] + dy, n[2] + dz)
+                    if 0 <= q[0] < GRID[0] and 0 <= q[1] < GRID[1] and 0 <= q[2] < GRID[2]:
+                        s += self._risk(q); cnt += 1
+        rbar = s / cnt if cnt else 0.0
+        alpha = self._alpha(rbar)
+        h_risk = rbar * self.dmax
+        h_dist = self._h_dist(n)
+        return (1 - alpha) * h_dist + alpha * h_risk
 
     def _neighbors(self, n):
         out = []
@@ -312,19 +342,6 @@ class AStar3D:
                 path.reverse()
                 return [((p[0] * RES + RES / 2), (p[1] * RES + RES / 2), (p[2] * RES + RES / 2))
                         for p in path]
-            # local mean risk over 3x3x3
-            s, n = 0.0, 0
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    for dz in (-1, 0, 1):
-                        q = (cur[0] + dx, cur[1] + dy, cur[2] + dz)
-                        if 0 <= q[0] < GRID[0] and 0 <= q[1] < GRID[1] and 0 <= q[2] < GRID[2]:
-                            s += self._risk(q); n += 1
-            rbar = s / n if n else 0.0
-            alpha = self._alpha(rbar)
-            h_risk = rbar * self.dmax
-            h_dist = self._h_dist(cur)
-            h = (1 - alpha) * h_dist + alpha * h_risk
             for nb in self._neighbors(cur):
                 if nb in closed:
                     continue
@@ -334,7 +351,10 @@ class AStar3D:
                 if gnew < gscore.get(nb, float("inf")):
                     gscore[nb] = gnew
                     came[nb] = cur
-                    heapq.heappush(openq, (gnew + h, nb))
+                    # f(nb) = g(nb) + h(nb); evaluating h at the parent
+                    # instead would make this a non-A* search with a stale
+                    # heuristic and would invalidate the baseline label.
+                    heapq.heappush(openq, (gnew + self._heuristic(nb), nb))
         return None
 
 
